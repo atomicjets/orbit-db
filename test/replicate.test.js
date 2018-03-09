@@ -22,7 +22,7 @@ const ipfsPath1 = './orbitdb/tests/replication/ipfs/1'
 const ipfsPath2 = './orbitdb/tests/replication/ipfs/2'
 
 Object.keys(testAPIs).forEach(API => {
-  describe(`orbit-db - Replication (${API})`, function() {
+  describe.only(`orbit-db - Replication (${API})`, function() {
     this.timeout(config.timeout * 2)
 
     let ipfsd1, ipfsd2, ipfs1, ipfs2
@@ -34,6 +34,37 @@ Object.keys(testAPIs).forEach(API => {
       let options
 
       before(async () => {
+        // config.daemon1.repo = ipfsPath1
+        // config.daemon2.repo = ipfsPath2
+        // rmrf.sync(config.daemon1.repo)
+        // rmrf.sync(config.daemon2.repo)
+        // rmrf.sync(dbPath1)
+        // rmrf.sync(dbPath2)
+        // ipfsd1 = await startIpfs(API, config.daemon1)
+        // ipfsd2 = await startIpfs(API, config.daemon2)
+        // ipfs1 = ipfsd1.api
+        // ipfs2 = ipfsd2.api
+        // // Use memory store for quicker tests
+        // const memstore = new MemStore()
+        // ipfs1.object.put = memstore.put.bind(memstore)
+        // ipfs1.object.get = memstore.get.bind(memstore)
+        // ipfs2.object.put = memstore.put.bind(memstore)
+        // ipfs2.object.get = memstore.get.bind(memstore)
+        // // Connect the peers manually to speed up test times
+        // await connectPeers(ipfs1, ipfs2)
+      })
+
+      after(async () => {
+        // if (ipfsd1)
+        //   await stopIpfs(ipfsd1)
+
+        // if (ipfsd2)
+        //   await stopIpfs(ipfsd2)
+      })
+
+      beforeEach(async () => {
+        clearInterval(timer)
+
         config.daemon1.repo = ipfsPath1
         config.daemon2.repo = ipfsPath2
         rmrf.sync(config.daemon1.repo)
@@ -52,18 +83,7 @@ Object.keys(testAPIs).forEach(API => {
         ipfs2.object.get = memstore.get.bind(memstore)
         // Connect the peers manually to speed up test times
         await connectPeers(ipfs1, ipfs2)
-      })
 
-      after(async () => {
-        if (ipfsd1)
-          await stopIpfs(ipfsd1)
-
-        if (ipfsd2)
-          await stopIpfs(ipfsd2)
-      })
-
-      beforeEach(async () => {
-        clearInterval(timer)
         orbitdb1 = new OrbitDB(ipfs1, dbPath1)
         orbitdb2 = new OrbitDB(ipfs2, dbPath2)
 
@@ -99,6 +119,12 @@ Object.keys(testAPIs).forEach(API => {
 
         if(orbitdb2) 
           await orbitdb2.stop()
+
+        if (ipfsd1)
+          await stopIpfs(ipfsd1)
+
+        if (ipfsd2)
+          await stopIpfs(ipfsd2)
       })
 
       it('replicates database of 1 entry', async () => {
@@ -337,48 +363,50 @@ Object.keys(testAPIs).forEach(API => {
             })
             // Resolve with a little timeout to make sure we 
             // don't receive more than one event
-            setTimeout(() => {
+            setTimeout( async () => {
               // console.log(eventCount['replicate.progress'], expectedEventCount)
-
-              if (eventCount['replicate.progress'] === expectedEventCount)
+              if (eventCount['replicate.progress'] === expectedEventCount) {
                 finished = true
+              }
             }, 500)
           })
 
-            const st = new Date().getTime()
-            timer = setInterval(async () => {
-              if (finished) {
-                clearInterval(timer)
+          const st = new Date().getTime()
+          timer = setInterval(async () => {
+            if (finished) {
+              clearInterval(timer)
 
-                const et = new Date().getTime()
-                console.log("Duration:", et - st, "ms")
+              // await db2.close()
 
-                try {
-                  assert.equal(eventCount['replicate'], expectedEventCount)
-                  assert.equal(eventCount['replicate.progress'], expectedEventCount)
+              const et = new Date().getTime()
+              console.log("Duration:", et - st, "ms")
 
-                  const replicateEvents = events.filter(e => e.event === 'replicate')
-                  assert.equal(replicateEvents.length, expectedEventCount)
-                  assert.equal(replicateEvents[0].entry.payload.value.split(' ')[0], 'hello')
-                  assert.equal(replicateEvents[0].entry.clock.time, expectedEventCount)
+              try {
+                assert.equal(eventCount['replicate'], expectedEventCount)
+                assert.equal(eventCount['replicate.progress'], expectedEventCount)
 
-                  const replicateProgressEvents = events.filter(e => e.event === 'replicate.progress')
-                  assert.equal(replicateProgressEvents.length, expectedEventCount)
-                  assert.equal(replicateProgressEvents[0].entry.payload.value.split(' ')[0], 'hello')
-                  assert.equal(replicateProgressEvents[0].entry.clock.time, expectedEventCount)
-                  assert.equal(replicateProgressEvents[0].replicationInfo.max, expectedEventCount)
-                  assert.equal(replicateProgressEvents[0].replicationInfo.progress, 1)
+                const replicateEvents = events.filter(e => e.event === 'replicate')
+                assert.equal(replicateEvents.length, expectedEventCount)
+                assert.equal(replicateEvents[0].entry.payload.value.split(' ')[0], 'hello')
+                assert.equal(replicateEvents[0].entry.clock.time, expectedEventCount)
 
-                  const replicatedEvents = events.filter(e => e.event === 'replicated')
-                  assert.equal(replicatedEvents[0].replicationInfo.max, expectedEventCount)
-                  assert.equal(replicatedEvents[replicatedEvents.length - 1].replicationInfo.progress, expectedEventCount)
+                const replicateProgressEvents = events.filter(e => e.event === 'replicate.progress')
+                assert.equal(replicateProgressEvents.length, expectedEventCount)
+                assert.equal(replicateProgressEvents[0].entry.payload.value.split(' ')[0], 'hello')
+                assert.equal(replicateProgressEvents[0].entry.clock.time, expectedEventCount)
+                assert.equal(replicateProgressEvents[0].replicationInfo.max, expectedEventCount)
+                assert.equal(replicateProgressEvents[0].replicationInfo.progress, 1)
 
-                  resolve()
-                } catch (e) {
-                  reject(e)
-                }
+                const replicatedEvents = events.filter(e => e.event === 'replicated')
+                assert.equal(replicatedEvents[0].replicationInfo.max, expectedEventCount)
+                assert.equal(replicatedEvents[replicatedEvents.length - 1].replicationInfo.progress, expectedEventCount)
+
+                resolve()
+              } catch (e) {
+                reject(e)
               }
-            }, 100)
+            }
+          }, 100)
         })
       })
 
@@ -411,6 +439,11 @@ Object.keys(testAPIs).forEach(API => {
               orbitdb2.key.getPublic('hex')
             ],
           }
+
+          // if (db2) {
+          //   await db2.drop()
+          // }
+
           db2 = await orbitdb2.eventlog(db1.address.toString(), options)
           await waitForPeers(ipfs2, [orbitdb1.id], db1.address.toString())
 
@@ -421,7 +454,7 @@ Object.keys(testAPIs).forEach(API => {
             eventCount['replicate'] ++
             current = db2._replicationInfo.progress
             total = db2._replicationInfo.max
-            // console.log("[replicate] ", '#' + eventCount['replicate'] + ':', current, '/', total, '| Tasks (in/queued/running/out):', db2._loader.tasksRequested, '/',  db2._loader.tasksQueued,  '/', db2._loader.tasksRunning, '/', db2._loader.tasksFinished)
+            console.log("[replicate] ", '#' + eventCount['replicate'] + ':', current, '/', total, '| Tasks (in/queued/running/out):', db2._loader.tasksRequested, '/',  db2._loader.tasksQueued,  '/', db2._loader.tasksRunning, '/', db2._loader.tasksFinished)
             events.push({ 
               event: 'replicate', 
               count: eventCount['replicate'], 
@@ -434,7 +467,7 @@ Object.keys(testAPIs).forEach(API => {
             eventCount['replicate.progress'] ++
             current = db2._replicationInfo.progress
             total = db2._replicationInfo.max
-            // console.log("[progress]  ", '#' + eventCount['replicate.progress'] + ':', current, '/', total, '| Tasks (in/queued/running/out):', db2._loader.tasksRequested, '/',  db2._loader.tasksQueued,  '/', db2._loader.tasksRunning, '/', db2._loader.tasksFinished)
+            console.log("[progress]  ", '#' + eventCount['replicate.progress'] + ':', current, '/', total, '| Tasks (in/queued/running/out):', db2._loader.tasksRequested, '/',  db2._loader.tasksQueued,  '/', db2._loader.tasksRunning, '/', db2._loader.tasksFinished)
             // assert.equal(current, total)
             events.push({ 
               event: 'replicate.progress', 
@@ -454,7 +487,7 @@ Object.keys(testAPIs).forEach(API => {
             total = db2._replicationInfo.max
             const values = db2.iterator({limit: -1}).collect()
             // console.log(current, "/", total, "/", values.length)
-            //console.log("[replicated]", '#' + eventCount['replicated'] + ':', current, '/', total, '| Tasks (in/queued/running/out):', db2._loader.tasksRequested, '/',  db2._loader.tasksQueued,  '/', db2._loader.tasksRunning, '/', db2._loader.tasksFinished, "|", db2._loader._stats.a, db2._loader._stats.b, db2._loader._stats.c, db2._loader._stats.d)
+            console.log("[replicated]", '#' + eventCount['replicated'] + ':', current, '/', total, '| Tasks (in/queued/running/out):', db2._loader.tasksRequested, '/',  db2._loader.tasksQueued,  '/', db2._loader.tasksRunning, '/', db2._loader.tasksFinished, "|", db2._loader._stats.a, db2._loader._stats.b, db2._loader._stats.c, db2._loader._stats.d)
             assert.equal(current <= total, true)
             events.push({ 
               event: 'replicated', 
@@ -483,6 +516,7 @@ Object.keys(testAPIs).forEach(API => {
                 const et = new Date().getTime()
                 console.log("Duration:", et - st, "ms")
 
+                console.log(eventCount['replicate'])
                 assert.equal(eventCount['replicate'], expectedEventCount)
                 assert.equal(eventCount['replicate.progress'], expectedEventCount)
                 assert.equal(eventCount['replicated'], expectedEventCount)
